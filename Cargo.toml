@@ -1,0 +1,11 @@
+[package]
+name = "tracer"
+version = "0.1.0"
+authors = ["Victor Moneratto <victor.moneratto@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+glam = "*"
+rayon = "*"
+image = "*"
+rand = "*"

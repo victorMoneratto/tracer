@@ -32,6 +32,12 @@ fn refract(v: &Vec3, n: &Vec3, ni_over_nt: f32) -> Option<Vec3> {
     }
 }
 
+fn schlick(cos: f32, ref_idx: f32) -> f32 {
+    let r0_sqrt = (1.0-ref_idx) / (1.0+ref_idx);
+    let r0 = r0_sqrt * r0_sqrt;
+    return r0 + (1.0-r0) * (1.0-cos).powi(5);
+}
+
 impl Material {
     pub fn scatter(self, r: &Ray, hit: &Hit) -> (Vec3, Option<Ray>) {
         match self {
@@ -51,16 +57,22 @@ impl Material {
             Material::Dielectric { albedo, ref_idx } => {
                 let outward_normal;
                 let ni_over_nt;
+                let cos;
                 if Vec3::dot(r.dir, hit.normal) > 0.0 {
                     outward_normal = -hit.normal;
                     ni_over_nt = ref_idx;
+                    cos = ref_idx * Vec3::dot(r.dir, hit.normal) / r.dir.length();
                 } else {
                     outward_normal = hit.normal;
                     ni_over_nt = 1.0 / ref_idx;
+                    cos = -Vec3::dot(r.dir, hit.normal) / r.dir.length();
                 }
 
                 if let Some(refract_dir) = refract(&r.dir, &outward_normal, ni_over_nt) {
-                    return (albedo, Some(Ray::new(hit.pos, refract_dir)))
+                    let reflect_prob = schlick(cos, ref_idx);
+                    if rand::random::<f32>() >= reflect_prob {
+                        return (albedo, Some(Ray::new(hit.pos, refract_dir)))
+                    }
                 }
 
                 (albedo, Some(Ray::new(hit.pos, reflect(r.dir, hit.normal))))

@@ -46,8 +46,9 @@ fn main() {
     let world = vec![
         Sphere { center: Vec3::new(0.0, 0.0, -1.0), radius: 0.5, mat: Material::Lambert { albedo: Vec3::new(0.1, 0.2, 0.5), }, },
         Sphere { center: Vec3::new(0.0, -100.5, -1.0), radius: 100.0, mat: Material::Lambert { albedo: Vec3::new(0.8, 0.8, 0.0) }, },
-        Sphere { center: Vec3::new(1.0, 0.0, -1.0), radius: 0.5, mat: Material::Metal { albedo: Vec3::new(0.8, 0.6, 0.2), fuzz: 0.0 }, },
-        Sphere { center: Vec3::new(-1.0, 0.0, -1.0), radius: 0.5, mat: Material::Dielectric { albedo: Vec3::one(), ref_idx: 1.5 }, },
+        Sphere { center: Vec3::new(1.0, 0.0, -1.0), radius: 0.5, mat: Material::Metal { albedo: Vec3::new(0.8, 0.6, 0.2), fuzz: 0.3 }, },
+        Sphere { center: Vec3::new(-1.0, 0.0, -1.0), radius: 0.5, mat: Material::Dielectric { albedo: Vec3::new(0.7, 0.9, 0.5), ref_idx: 1.5 }, },
+        Sphere { center: Vec3::new(-1.0, 0.0, -1.0), radius: -0.45, mat: Material::Dielectric { albedo: Vec3::one(), ref_idx: 1.5 }, },
     ];
 
     for y in (0..NY).rev() {

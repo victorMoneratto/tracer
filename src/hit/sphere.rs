@@ -25,7 +25,7 @@ impl Hittable for Sphere {
         let t = (-b - delta.sqrt()) / (2.0 * a);
         if t > range[0] && t < range[1] {
             let pos = r.point_at(t);
-            let normal = Vec3::normalize(pos - self.center);
+            let normal = (pos - self.center) / self.radius;
             return Some(Hit { t, pos, normal, mat: self.mat.clone() });
         }
 

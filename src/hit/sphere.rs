@@ -26,16 +26,36 @@ impl Hittable for Sphere {
         if t > range[0] && t < range[1] {
             let pos = r.point_at(t);
             let normal = (pos - self.center) / self.radius;
-            return Some(Hit { t, pos, normal, mat: self.mat.clone() });
+            return Some(Hit {
+                t,
+                pos,
+                normal,
+                mat: self.mat.clone(),
+            });
         }
 
         let t = (-b + delta.sqrt()) / (2.0 * a);
         if t > range[0] && t < range[1] {
             let pos = r.point_at(t);
             let normal = (pos - self.center) / self.radius;
-            return Some(Hit { t, pos, normal, mat: self.mat.clone() });
+            return Some(Hit {
+                t,
+                pos,
+                normal,
+                mat: self.mat.clone(),
+            });
         }
         None
+    }
+}
+
+impl Sphere {
+    pub fn new(center: Vec3, radius: f32, mat: Material) -> Sphere {
+        Sphere {
+            center,
+            radius,
+            mat,
+        }
     }
 }
 

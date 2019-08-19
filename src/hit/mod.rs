@@ -1,6 +1,6 @@
+use crate::material::Material;
 use crate::ray::Ray;
 use glam::f32::Vec3;
-use crate::material::Material;
 
 pub mod sphere;
 
@@ -8,7 +8,7 @@ pub struct Hit {
     pub t: f32,
     pub pos: Vec3,
     pub normal: Vec3,
-    pub mat: Material
+    pub mat: Material,
 }
 
 pub trait Hittable {

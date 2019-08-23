@@ -8,9 +8,10 @@ use glam::Vec2;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write as IOWrite;
-use std::fmt::Write;
 use std::time::Instant;
 use std::ops::Div;
+use rayon::prelude::*;
+use std::io;
 
 mod camera;
 mod hit;
@@ -18,8 +19,8 @@ mod material;
 mod ray;
 mod math;
 
-const VIEW_DIMENSIONS : [i32; 2] = [854, 480];
-const SAMPLES: i32 = 200;
+const VIEW_DIMENSIONS : [i32; 2] = [600, 600];
+const SAMPLES: i32 = 2;
 
 fn trace(r: &Ray, world: &Vec<Sphere>, depth: i32) -> Vec3 {
     if let Some(hit) = world.hit(r, [1e-3, std::f32::MAX]) {
@@ -39,19 +40,19 @@ fn trace(r: &Ray, world: &Vec<Sphere>, depth: i32) -> Vec3 {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let lookat = Vec3::new(0.0, 0.0, -1.0);
-    let lookfrom = Vec3::new(3.0, 3.0, 2.0);
+    let lookfrom = Vec3::new(0.0, 0.25, 0.0);
 
-    let camera = Camera::new(
+    let camera = &Camera::new(
         lookfrom,
         lookat,
         Vec3::new(0.0, 1.0, 0.0),
-        20.0,
+        100.0,
         VIEW_DIMENSIONS[0] as f32 / VIEW_DIMENSIONS[1] as f32,
-        0.25,
+        0.025,
         (lookat-lookfrom).length()
     );
 
-    let world = vec![
+    let world = &vec![
         Sphere::new(
             Vec3::new(0.0, 0.0, -1.0), 0.5, Material::Lambert { albedo: Vec3::new(0.1, 0.2, 0.5), },
         ),
@@ -69,45 +70,43 @@ fn main() -> Result<(), Box<dyn Error>> {
         ),
     ];
 
-    let mut buffer = vec![0u8; (4 * VIEW_DIMENSIONS[0] * VIEW_DIMENSIONS[1]) as usize];
-
     let instant_before_tracing = Instant::now();
-    for y in (0..VIEW_DIMENSIONS[1]).rev() {
-        for x in 0..VIEW_DIMENSIONS[0] {
-            let mut color = Vec3::zero();
-            for _ in 0..SAMPLES
-                {
-                let offset = Vec2::new(rand::random(), rand::random());
-                let uv = Vec2::new(
-                    (offset.x() + x as f32) / VIEW_DIMENSIONS[0] as f32,
-                    (offset.y() + y as f32) / VIEW_DIMENSIONS[1] as f32,
-                );
-                color += trace(&camera.get_ray(uv), &world, 50);
-            }
-            color /= SAMPLES as f32;
 
-            color = color.max(Vec3::zero());
-            color = color.min(Vec3::one());
-
-            const GAMMA: f32 = 2.2;
-            color = Vec3::new(
-                color.x().powf(1.0 / GAMMA),
-                color.y().powf(1.0 / GAMMA),
-                color.z().powf(1.0 / GAMMA),
+    let buffer : Vec<u8> = (0..VIEW_DIMENSIONS[1]).into_par_iter().flat_map(|y| (0..VIEW_DIMENSIONS[0]).into_par_iter().flat_map(move |x|{
+        let mut color = Vec3::zero();
+        for _ in 0..SAMPLES {
+            let offset = Vec2::new(rand::random(), rand::random());
+            let uv = Vec2::new(
+                (offset.x() + x as f32) / VIEW_DIMENSIONS[0] as f32,
+                (offset.y() + y as f32) / VIEW_DIMENSIONS[1] as f32,
             );
-
-            let base: usize = 4 * (y * VIEW_DIMENSIONS[0] + x) as usize;
-            let (r, g, b, a) = (
-                (color.x() * 255.99) as u8,
-                (color.y() * 255.99) as u8,
-                (color.z() * 255.99) as u8,
-                255 as u8);
-            buffer[base + 0] = b;
-            buffer[base + 1] = g;
-            buffer[base + 2] = r;
-            buffer[base + 3] = a;
+            color += trace(&camera.get_ray(uv), &world, 50);
         }
-    }
+        color /= SAMPLES as f32;
+
+        color = color.max(Vec3::zero());
+        color = color.min(Vec3::one());
+
+        const GAMMA: f32 = 2.2;
+        color = Vec3::new(
+            color.x().powf(1.0 / GAMMA),
+            color.y().powf(1.0 / GAMMA),
+            color.z().powf(1.0 / GAMMA),
+        );
+
+        let (r, g, b, a) = (
+            (color.x() * 255.99) as u8,
+            (color.y() * 255.99) as u8,
+            (color.z() * 255.99) as u8,
+            255 as u8);
+
+        (0..4).into_par_iter().map(move |i| match i {
+            0 => b,
+            1 => g,
+            2 => r,
+            _ => a
+        } as u8)
+    })).collect();
 
     let time_elapsed_tracing = instant_before_tracing.elapsed();
     let time_per_pixel = time_elapsed_tracing.div((VIEW_DIMENSIONS[0] * VIEW_DIMENSIONS[1]) as u32);
@@ -117,21 +116,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:>6.2} micros/pixel", time_per_pixel.as_nanos() as f32 * 1e-3);
     println!("{:>6} nanos/sample", time_per_sample.as_nanos() as f32);
 
-    let tga_header : Vec<u8> = vec![
-            0, // ID length
-            0, // no color map
-            2, // uncompressed, true color
-            0, 0, 0, 0, 0,
-            0, 0, 0, 0, // x and y origin
-            (VIEW_DIMENSIONS[0] & 0x00FF) as u8,
-            ((VIEW_DIMENSIONS[0] & 0xFF00) >> 8) as u8,
-            (VIEW_DIMENSIONS[1] & 0x00FF) as u8,
-            ((VIEW_DIMENSIONS[1] & 0xFF00) >> 8) as u8,
-            32, // 32 bit bitmap
-            0
+    write_to_tga("output.tga", VIEW_DIMENSIONS, &buffer)?;
+
+    Ok(())
+}
+
+fn write_to_tga(path: &str, dimensions: [i32; 2], buffer: &Vec<u8>) -> io::Result<()> {
+    let tga_header: Vec<u8> = vec![
+        0, // ID length
+        0, // no color map
+        2, // uncompressed, true color
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, // x and y origin
+        (dimensions[0] & 0x00FF) as u8,
+        ((dimensions[0] & 0xFF00) >> 8) as u8,
+        (dimensions[1] & 0x00FF) as u8,
+        ((dimensions[1] & 0xFF00) >> 8) as u8,
+        32, // 32 bit bitmap
+        0
     ];
 
-    let mut file = File::create("output.tga")?;
+    let mut file = File::create(path)?;
     file.write(tga_header.as_ref())?;
     file.write(buffer.as_ref())?;
     Ok(())

@@ -20,7 +20,7 @@ mod ray;
 mod math;
 
 const VIEW_DIMENSIONS : [i32; 2] = [600, 600];
-const SAMPLES: i32 = 2;
+const SAMPLES: i32 = 1;
 
 fn trace(r: &Ray, world: &Vec<Sphere>, depth: i32) -> Vec3 {
     if let Some(hit) = world.hit(r, [1e-3, std::f32::MAX]) {

@@ -4,8 +4,13 @@ version = "0.1.0"
 authors = ["Victor Moneratto <victor.moneratto@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+name = "viewer"
+path = "src/viewer.rs"
+
 [dependencies]
 glam = "*"
 rayon = "*"
 image = "*"
 rand = "*"
+glium = "*"

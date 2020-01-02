@@ -1,7 +1,7 @@
+use crate::math::random_in_unit_disk;
 use crate::ray::Ray;
 use glam::f32::Vec3;
-use glam::{Vec2};
-use crate::math::random_in_unit_disk;
+use glam::Vec2;
 
 pub struct Camera {
     pub origin: Vec3,
@@ -15,7 +15,15 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(origin: Vec3, lookat: Vec3, up: Vec3, vertical_fov: f32, aspect: f32, aperture: f32, focus_dist: f32) -> Camera {
+    pub fn new(
+        origin: Vec3,
+        lookat: Vec3,
+        up: Vec3,
+        vertical_fov: f32,
+        aspect: f32,
+        aperture: f32,
+        focus_dist: f32,
+    ) -> Camera {
         let theta = vertical_fov.to_radians();
         let half_height = (theta / 2.0).tan();
         let half_width = aspect * half_height;
@@ -28,11 +36,16 @@ impl Camera {
 
         Camera {
             origin,
-            lower_left: origin - (focus_dist * half_width * u) - (focus_dist * half_height * v) - (focus_dist * w),
-            horizontal: 2.0 * half_width * focus_dist *  u,
-            vertical: 2.0 * half_height * focus_dist *  v,
+            lower_left: origin
+                - (focus_dist * half_width * u)
+                - (focus_dist * half_height * v)
+                - (focus_dist * w),
+            horizontal: 2.0 * half_width * focus_dist * u,
+            vertical: 2.0 * half_height * focus_dist * v,
             lens_radius,
-            u, v, w
+            u,
+            v,
+            w,
         }
     }
 
@@ -41,7 +54,9 @@ impl Camera {
         let offset = self.u * sample_in_radius.x() + self.v * sample_in_radius.y();
         Ray::new(
             self.origin + offset,
-            (self.lower_left - self.origin - offset) + (uv.x() * self.horizontal) + (uv.y() * self.vertical),
+            (self.lower_left - self.origin - offset)
+                + (uv.x() * self.horizontal)
+                + (uv.y() * self.vertical),
         )
     }
 }

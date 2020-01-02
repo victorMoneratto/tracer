@@ -2,8 +2,6 @@ use crate::material::Material;
 use crate::ray::Ray;
 use glam::f32::Vec3;
 
-pub mod sphere;
-
 pub struct Hit {
     pub t: f32,
     pub pos: Vec3,

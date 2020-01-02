@@ -1,6 +1,6 @@
-use rand::distributions::{UnitSphereSurface, Distribution, UnitCircle};
 use glam::f32::Vec3;
 use glam::Vec2;
+use rand::distributions::{Distribution, UnitCircle, UnitSphereSurface};
 
 pub fn random_in_unit_sphere() -> Vec3 {
     let unit_sphere = UnitSphereSurface::new();

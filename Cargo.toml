@@ -5,8 +5,12 @@ authors = ["Victor Moneratto <victor.moneratto@gmail.com>"]
 edition = "2018"
 
 [[bin]]
-name = "viewer"
-path = "src/viewer.rs"
+name = "offline"
+path = "src/bin/offline.rs"
+
+[[bin]]
+name = "realtime"
+path = "src/bin/realtime.rs"
 
 [dependencies]
 glam = "*"
@@ -14,3 +18,4 @@ rayon = "*"
 image = "*"
 rand = "*"
 glium = "*"
+shaderc = "*"

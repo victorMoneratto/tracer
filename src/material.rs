@@ -1,7 +1,7 @@
 use crate::hit::Hit;
+use crate::math::{random_in_unit_sphere, reflect, refract, schlick};
 use crate::ray::Ray;
 use glam::f32::Vec3;
-use crate::math::{random_in_unit_sphere, reflect, refract, schlick};
 
 #[derive(Copy, Clone)]
 pub enum Material {

@@ -1,9 +1,11 @@
 #![allow(unused_imports)]
+#![feature(clamp)]
+
 use std::time::Instant;
 
-use glium::backend::glutin::glutin::dpi::LogicalSize;
 use glium::backend::glutin::glutin::{
-    ContextBuilder, Event, EventsLoop, GlProfile, GlRequest, Robustness, Window,
+    dpi::LogicalSize, ContextBuilder, DeviceEvent, ElementState, Event, EventsLoop, GlProfile,
+    GlRequest, KeyboardInput, MouseCursor, Robustness, VirtualKeyCode, Window, WindowEvent,
 };
 use glium::glutin::WindowBuilder;
 use glium::texture::{
@@ -11,11 +13,17 @@ use glium::texture::{
 };
 use glium::{implement_vertex, uniform, Display, Program, Surface, VertexBuffer};
 
+use glam::{deg, Quat, Vec3};
+use glium::backend::glutin::glutin::dpi::LogicalPosition;
 use glium::backend::Facade;
 use glium::framebuffer::SimpleFrameBuffer;
 use glium::index::{IndicesSource, NoIndices};
 use glium::texture::{MipmapsOption, SrgbFormat};
 use glium::uniforms::{EmptyUniforms, MagnifySamplerFilter};
+use glium::RawUniformValue::Vec2;
+use image::math::utils::clamp;
+use std::convert::identity;
+use tracer::camera::Camera;
 
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -32,6 +40,14 @@ fn main() {
     );
 
     let (display, mut events_loop) = create_window(display_size);
+    let gl_window = display.gl_window();
+    let window: &Window = gl_window.window();
+    window.grab_cursor(true).unwrap();
+    window.hide_cursor(true);
+    window.set_cursor_position(LogicalPosition::new(
+        display_size.width * 0.5,
+        display_size.height * 0.5,
+    )).unwrap();
 
     let geometry = create_fullscreen_geometry(&display);
 
@@ -54,24 +70,104 @@ fn main() {
         resolution.1,
     )
     .unwrap();
-    let mut can_accumulate = true;
+
+    let instant_start = Instant::now();
+    let mut instant_last_frame = Instant::now();
+
+    let mut mouse_input: Vec3;
+    let mut movement_input = Vec3::zero();
+
+    let mut camera_angles = Vec3::zero();
+    let mut camera_origin = Vec3::zero();
 
     let mut closed = false;
     while !closed {
+        mouse_input = Vec3::zero();
+
         events_loop.poll_events(|ev| match ev {
-            Event::WindowEvent { event, .. } => match event {
-                glium::glutin::WindowEvent::CloseRequested => closed = true,
-                _ => (),
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => closed = true,
+            Event::DeviceEvent { event, .. } => match event {
+                DeviceEvent::MouseMotion { delta: mouse_delta } => {
+                    let mouse_delta = Vec3::new(mouse_delta.0 as _, mouse_delta.1 as _, 0.0f32);
+                    mouse_input += mouse_delta;
+                }
+                DeviceEvent::Key(KeyboardInput {
+                    virtual_keycode: Some(key),
+                    state,
+                    ..
+                }) => {
+                    let sign = match state {
+                        ElementState::Pressed => 1.0f32,
+                        ElementState::Released => -1.0f32,
+                    };
+
+                    match key {
+                        VirtualKeyCode::W => movement_input += sign * Vec3::unit_z(),
+                        VirtualKeyCode::S => movement_input += -sign * Vec3::unit_z(),
+
+                        VirtualKeyCode::A => movement_input += sign * Vec3::unit_x(),
+                        VirtualKeyCode::D => movement_input += -sign * Vec3::unit_x(),
+
+                        VirtualKeyCode::Q => movement_input += -sign * Vec3::unit_y(),
+                        VirtualKeyCode::E => movement_input += sign * Vec3::unit_y(),
+
+                        // System Input
+                        VirtualKeyCode::Escape => closed = true,
+                        _ => {}
+                    }
+                    movement_input = movement_input.min(Vec3::one()).max(-Vec3::one());
+                }
+                _ => {}
             },
-            _ => (),
+            _ => {
+                //println!("{:?}", ev);
+            }
         });
+
+        let mut can_accumulate = true;
+
+        let instant_this_frame = Instant::now();
+        let _frame_time = (instant_this_frame - instant_start).as_nanos() as f32 * 1e-9f32;
+        let dt = (instant_this_frame - instant_last_frame).as_nanos() as f32 * 1e-9f32;
+        instant_last_frame = instant_this_frame;
+
+        let camera_angles_delta = Vec3::new(-10.0, 10.0, 0.0) * mouse_input * dt;
+        camera_angles += camera_angles_delta;
+        camera_angles.set_y(camera_angles.y().clamp(-85.0, 85.0));
+        let camera_rotation = Quat::from_rotation_ypr(
+            deg(camera_angles.x()),
+            deg(camera_angles.y()),
+            deg(camera_angles.z()),
+        );
+
+        let camera_movement_delta = 1.0 * movement_input * dt;
+        camera_origin += camera_rotation * camera_movement_delta;
+
+        if camera_angles_delta.length_squared() > 0.0
+            || camera_movement_delta.length_squared() > 0.0
+        {
+            can_accumulate = false;
+        }
+
+        let camera = &Camera::new(
+            camera_origin,
+            camera_origin + camera_rotation * Vec3::unit_z(),
+            Vec3::new(0.0, 1.0, 0.0),
+            100.0,
+            display_size.width as f32 / display_size.height as f32,
+            0.025,
+            1.0,
+        );
 
         let instant_before_render = Instant::now();
 
         let render = SrgbTexture2d::with_format(
             &display,
             glium::texture::RawImage2d::from_raw_rgba(
-                tracer::trace::image((resolution.0 as _, resolution.1 as _), 1, 10),
+                tracer::trace::image(camera, (resolution.0 as _, resolution.1 as _), 1, 50),
                 resolution,
             ),
             SrgbFormat::U8U8U8U8,
@@ -81,15 +177,19 @@ fn main() {
 
         // composite render with accumulated image
         let mut composite_surface = SimpleFrameBuffer::new(&display, &composite).unwrap();
-        composite_surface.draw(
-            &geometry.0, &geometry.1,
-            &composite_program,
-            &uniform!(
+        composite_surface
+            .draw(
+                &geometry.0,
+                &geometry.1,
+                &composite_program,
+                &uniform!(
                 render_tex: &render,
                 accumulation_tex: &accumulation,
-                history_alpha: if can_accumulate { 0.975f32 } else { 0.0f32 }),
-            &Default::default()).unwrap();
-        can_accumulate = true;
+                history_alpha: if can_accumulate { 0.9f32 } else { 0.0f32 }
+                ),
+                &Default::default(),
+            )
+            .unwrap();
 
         // update accumulated image
         let accumulation_surface = SimpleFrameBuffer::new(&display, &accumulation).unwrap();
@@ -99,7 +199,6 @@ fn main() {
         let frame = display.draw();
         composite_surface.fill(&frame, MagnifySamplerFilter::Linear);
         frame.finish().unwrap();
-
 
         let instant_after_render = Instant::now();
         let render_time_in_seconds =
@@ -162,6 +261,7 @@ fn create_window(size: LogicalSize) -> (Display, EventsLoop) {
         .with_stencil_buffer(8);
     let events_loop = EventsLoop::new();
     let display = Display::new(wb, cb, &events_loop).unwrap();
+
     (display, events_loop)
 }
 

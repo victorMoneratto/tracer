@@ -9,20 +9,7 @@ use std::fs::File;
 use std::io;
 use std::io::Write;
 
-pub fn image(dimensions: (usize, usize), samples: i32, depth: i32) -> Vec<u8> {
-    let look_at = Vec3::new(0.0, 0.0, -1.0);
-    let look_from = Vec3::new(0.0, 0.25, 0.0);
-
-    let camera = &Camera::new(
-        look_from,
-        look_at,
-        Vec3::new(0.0, 1.0, 0.0),
-        100.0,
-        dimensions.0 as f32 / dimensions.1 as f32,
-        0.025,
-        (look_at - look_from).length(),
-    );
-
+pub fn image(camera: &Camera, dimensions: (usize, usize), samples: i32, depth: i32) -> Vec<u8> {
     let world = &vec![
         Sphere::new(
             Vec3::new(0.0, 0.0, -1.0),
